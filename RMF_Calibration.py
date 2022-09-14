@@ -472,21 +472,21 @@ for i in range(numchains):
 test_params[0,:] = np.array([497.479,  1.3061, -16.28,   0.593, 238.0, 0.0256,  37.62,  112.8])
 
 
-# numcal = range(numchains)
-# with Pool(12) as p:
-#     theta_array = p.starmap(calibration_runner,zip(repeat(rbm),repeat(y),repeat(obsvar),test_params,repeat(numsamp),numcal,repeat(caldir)))
+numcal = range(numchains)
+with Pool(12) as p:
+    theta_array = p.starmap(calibration_runner,zip(repeat(rbm),repeat(y),repeat(obsvar),test_params,repeat(numsamp),numcal,repeat(caldir)))
 
 
-all_chains = np.zeros((numsamp*numchains,8))
+# all_chains = np.zeros((numsamp*numchains,8))
 
-for i in range(numchains):
-    calfile = "Cal-2022-09-14_19-25/caltheta_{}.out".format(i)
-    all_chains[i*numsamp:i*numsamp+numsamp,:] = np.loadtxt(calfile)
+# for i in range(numchains):
+#     calfile = "Cal-2022-09-14_19-25/caltheta_{}.out".format(i)
+#     all_chains[i*numsamp:i*numsamp+numsamp,:] = np.loadtxt(calfile)
 # print(all_chains)
-# all_chains = theta_array[0]
-# for ical in theta_array[1:]:
-#     #print(ical.shape)
-#     all_chains = np.vstack((all_chains,ical,))
+all_chains = theta_array[0]
+for ical in theta_array[1:]:
+    #print(ical.shape)
+    all_chains = np.vstack((all_chains,ical,))
     
 
 #samples = np.random.randn(ndim * nsamples).reshape([nsamples, ndim])
