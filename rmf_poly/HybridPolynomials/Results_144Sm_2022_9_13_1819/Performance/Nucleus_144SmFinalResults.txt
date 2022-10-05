@@ -1,2 +1,0 @@
-{"ThresholdValue", "TotalTimePerCalc", "BasisNumber", "RGalerMSE", "BAGalerMSE", "RExactSD", "BAExactSD"}
-{0.0005, Indeterminate, 242, Sqrt[Mean[{}]^2 + StandardDeviation[{}]^2], Sqrt[Mean[{}]^2 + StandardDeviation[{}]^2], StandardDeviation[{}], StandardDeviation[{}]}

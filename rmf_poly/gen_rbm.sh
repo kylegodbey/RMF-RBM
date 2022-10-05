@@ -77,19 +77,22 @@ basisfile="Nucleus_"$nuc"BasisNumbers.txt"
 org_file="Nucleus_"$nuc"_CoeffEquations.txt"
 file="Nucleus_"$nuc"_CoeffEquations.tmp"
 cp $org_file $file
+echo "" >> $file
+
+totbasis=$(wc -l < $file)
 
 echo "
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def rmf_poly_"$nuc"_"$hybrid"(np.ndarray[DTYPE_t] x0, np.ndarray[DTYPE_t] params):
 
-	cdef np.ndarray[DTYPE_t] result = np.ones([x0.shape[0]], dtype=DTYPE)
+	cdef np.ndarray[DTYPE_t] result = np.ones([$totbasis], dtype=DTYPE)
 " > rmf_poly-$nuc.tmp
 
 cp ../../parse_math.sh .
 ./parse_math.sh $nbasis $nfields $nstates $pstates $file $basisfile
 
-echo "" >> $file
+# echo "" >> $file
 i=0
 while read l; do
   echo -e "\tresult[$i]=$l" >> py.tmp
@@ -119,29 +122,29 @@ echo "
 @cython.wraparound(False)
 def rmf_poly_"$nuc"_"$hybrid"_jac(np.ndarray[DTYPE_t] x0, np.ndarray[DTYPE_t] params):
 
-	cdef np.ndarray[DTYPE_t,ndim=2] result = np.zeros([x0.shape[0],x0.shape[0]], dtype=DTYPE)
+	cdef np.ndarray[DTYPE_t,ndim=2] result = np.zeros([$totbasis,$totbasis], dtype=DTYPE)
 " > rmf_poly-$nuc.tmp
 
 cp ../../parse_math.sh .
 ./parse_math.sh $nbasis $nfields $nstates $pstates $file $basisfile
 
 echo "" >> $file
-length=$(wc -l < $file)
-totbasis=$(awk -v len=$length 'BEGIN{print sqrt(len)}')
 echo $nuc" basis: $totbasis"
 rm py.tmp
-
+rm tmp.f90
 i=0
 while read l; do
   x=$((i / totbasis))
   y=$((i % totbasis))
   echo -e "\tresult[$y,$x]=$l" >> py.tmp
+  echo -e "\tresult($((y+1)),$((x+1)))=$l" >> tmp.f90
   i=$((i+1))
 done < $file
 
 cat rmf_poly-$nuc.tmp py.tmp > rmf_poly_$nuc-$hybrid.tmp
 
 sed -ri '/^.{,23}$/d' rmf_poly_$nuc-$hybrid.tmp
+sed -ri '/^.{,23}$/d' tmp.f90
 
 
 echo ""  >> rmf_poly_$nuc-$hybrid.tmp
@@ -248,7 +251,76 @@ echo "	return energy" >> rmf_poly_$nuc-$hybrid.tmp
 
 cat rmf_poly_$nuc-$hybrid.tmp >> ../../$outfile.pyx
 
-### FORTRAN ###
+if [ $nuc = "48Ca" ] || [ $nuc = "208Pb" ]; then
+
+### NEUTRON RADIUS FUNCTION ###
+
+org_file="Nucleus_"$nuc"_NeutronRadiusSquared.txt"
+file="Nucleus_"$nuc"_NeutronRadiusSquared.tmp"
+cp $org_file $file
+
+echo "
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def neutron_radius_squared_"$nuc"_"$hybrid"(np.ndarray[DTYPE_t] x0, np.ndarray[DTYPE_t] params):
+
+	cdef double radius
+" > rmf_poly-$nuc.tmp
+
+cp ../../parse_math.sh .
+./parse_math.sh $nbasis $nfields $nstates $pstates $file $basisfile
+
+rm py.tmp
+
+echo "" >> $file
+i=0
+while read l; do
+  echo -e "\tradius=$l" >> py.tmp
+  i=$((i+1))
+done < $file
+
+cat rmf_poly-$nuc.tmp py.tmp > rmf_poly_$nuc-$hybrid.tmp
+
+echo ""  >> rmf_poly_$nuc-$hybrid.tmp
+echo "	return radius" >> rmf_poly_$nuc-$hybrid.tmp
+
+cat rmf_poly_$nuc-$hybrid.tmp >> ../../$outfile.pyx
+
+### PROTON RADIUS FUNCTION ###
+
+org_file="Nucleus_"$nuc"_ProtonRadiusSquared.txt"
+file="Nucleus_"$nuc"_ProtonRadiusSquared.tmp"
+cp $org_file $file
+
+echo "
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def proton_radius_squared_"$nuc"_"$hybrid"(np.ndarray[DTYPE_t] x0, np.ndarray[DTYPE_t] params):
+
+	cdef double radius
+" > rmf_poly-$nuc.tmp
+
+cp ../../parse_math.sh .
+./parse_math.sh $nbasis $nfields $nstates $pstates $file $basisfile
+
+rm py.tmp
+
+echo "" >> $file
+i=0
+while read l; do
+  echo -e "\tradius=$l" >> py.tmp
+  i=$((i+1))
+done < $file
+
+cat rmf_poly-$nuc.tmp py.tmp > rmf_poly_$nuc-$hybrid.tmp
+
+echo ""  >> rmf_poly_$nuc-$hybrid.tmp
+echo "	return radius" >> rmf_poly_$nuc-$hybrid.tmp
+
+cat rmf_poly_$nuc-$hybrid.tmp >> ../../$outfile.pyx
+
+fi
+### FORTRAN POLY ###
 
 echo -e "function rmf_poly_"$nuc"_$hybrid(x0, params) result(result)
     
@@ -258,7 +330,7 @@ echo -e "function rmf_poly_"$nuc"_$hybrid(x0, params) result(result)
 
     real(kind=8), intent(in) :: x0(:)
     real(kind=8), intent(in) :: params(:)
-    real(kind=8) :: result(size(x0))
+    real(kind=8), dimension(size(x0)) :: result
 
 
 " > rmf_poly_f90.tmp
@@ -291,6 +363,53 @@ cat rmf_poly_f90.tmp f90.tmp >> ../../$outfile.f90
 
 rm *.tmp
 
+### FORTRAN JACOBIAN ###
+
+echo -e "function rmf_poly_"$nuc"_"$hybrid"_jac(x0, params) result(result)
+    
+    implicit none
+
+    !integer, intent(in) :: n
+
+    real(kind=8), intent(in) :: x0(:)
+    real(kind=8), intent(in) :: params(:)
+    real(kind=8), dimension(size(x0),size(x0)) :: result
+
+    result(:,:) = 0.0
+" > rmf_poly_f90.tmp
+
+org_file="Nucleus_"$nuc"_JacobianKyle.txt"
+file="Nucleus_"$nuc"_Jacobian.tmp"
+cp $org_file $file
+
+./parse_math.sh $nbasis $nfields $nstates $pstates $file $basisfile
+
+echo "" >> $file
+# i=0
+# while read l; do
+#   x=$((i / totbasis + 1))
+#   y=$((i % totbasis + 1))
+#   echo -e "\tresult($y,$x)=$l" >> f90.tmp
+#   i=$((i+1))
+# done < $file
+
+
+for ele in `seq 0 $i`; do
+
+# sed -i "s/result\[$ele\]/result($((ele+1)))/g" f90.tmp
+sed -i "s/x0\[$ele\]/x0($((ele+1)))/g" tmp.f90
+sed -i "s/params\[$ele\]/params($((ele+1)))/g" tmp.f90
+
+done
+
+echo "end function rmf_poly_"$nuc"_"$hybrid"_jac" >> tmp.f90
+
+cat rmf_poly_f90.tmp tmp.f90 >> ../../$outfile.f90
+
+rm *.tmp tmp.f90
+
+
+
 cd ..
 
 done
@@ -303,6 +422,6 @@ python3 setup.py build_ext --inplace
 
 mv $outfile.*.so ../$outfile.so
 
-f2py3 -c --f90flags="-march=native -mtune=native -Ofast -ffree-line-length-0" -m $outfile_fort $outfile.f90
+# f2py3 -c --f90flags="-march=native -mtune=native -Ofast -ffree-line-length-0" -m ${outfile}_fort $outfile.f90
 
-mv $outfile_fort.*.so ../$outfile_fort.so
+# mv ${outfile}_fort.*.so ../${outfile}_fort.so

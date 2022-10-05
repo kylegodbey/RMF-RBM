@@ -446,7 +446,7 @@ caldir = os.path.join(os.getcwd(), "Cal-"+datetime.datetime.now().strftime('%Y-%
 os.makedirs(caldir, exist_ok=True)
 
 
-numsamp = 1000
+numsamp = 1000000
 numchains=12
 
 test_params = np.zeros((numchains,8))
